@@ -239,7 +239,7 @@ void PWM_Calculate()
   Position_Add += Speed_Need;  //
   
   Position_Add = constrain(Position_Add, -800, 800);
-//   Serial.print(Position_AVG_Filter);  Serial.print("\t"); Serial.println(Position_Add);
+  // Serial.print(Position_AVG_Filter);  Serial.print("\t"); Serial.println(Position_Add);
 //Serial.print((Angle_Car-2 + K_Base)* KA_P);  Serial.print("\t");
   pwm =  (Angle_Car-5 + K_Base)* KA_P   //P
       + Gyro_Car * KA_D //D
@@ -460,7 +460,7 @@ void Init()
   Speed_Diff = 0;Speed_Diff_ALL = 0;
   
   KA_P = 25.0;
-  KA_D = 3.5;
+  KA_D = 2; //3.5;
   KP_P = 30;
   KP_I = 0.34;
   K_Base = 6.7;
@@ -619,9 +619,11 @@ int UpdateAttitude()
   Serial.print(gyroZ); Serial.print("\t");
 
   Serial.print("\t");
+  Serial.println("");
 #endif
 
 #if 0
+//  This is the rotation around the axle
   Serial.print(roll); Serial.print("\t");
  // Serial.print(gyroXangle); Serial.print("\t");
  // Serial.print(compAngleX); Serial.print("\t");
@@ -629,6 +631,7 @@ int UpdateAttitude()
 
   Serial.print("\t");
 
+// Pitch is the rotation not rurning left or right but yawing side to side.  I am not sure why we care about this value as it is almost always near zero.  Can we just use the roll?
   Serial.print(pitch); Serial.print("\t");
  // Serial.print(gyroYangle); Serial.print("\t");
  // Serial.print(compAngleY); Serial.print("\t");
@@ -690,6 +693,7 @@ void MusicPlay()
      noTone(tonePin);
   }
  */
+ /*
   if( Angle_Car > 45 || Angle_Car < -45 ) //if car fall down ,let's alarm
   {
      if((millis() - LEDTimer) > 200)
@@ -705,6 +709,30 @@ void MusicPlay()
      digitalWrite(LED, 0);
      isInBuzzer = false;
   }
+
+*/
+//  if( analogRead(AUX_IN_PIN) > 1000 ) {
+
+//Serial.print("throttle:");
+//Serial.println(analogRead(AUX_IN_PIN));
+
+/*
+  if(false ) {
+     if((millis() - LEDTimer) > 200)
+    {
+          LEDTimer = millis();
+         blinkState = !blinkState;
+         digitalWrite(LED, blinkState);
+         isInBuzzer = true;
+    }
+    
+  } else {
+          digitalWrite(LED, 0);
+          isInBuzzer = false;
+    
+  }
+*/
+  
 }
 
 

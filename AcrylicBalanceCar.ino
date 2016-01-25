@@ -7,9 +7,9 @@
 #include "Kalman.h" 
 #include "ComPacket.h"
 #include "I2C.h"
-#include <EEPROM.h>
-//#include "music.h"
-#include "MyEEprom.h"
+//#include <EEPROM.h>
+#include "music.h"
+//#include "MyEEprom.h"
 
 #include "PinChangeInt.h" // for RC reciver
 
@@ -21,23 +21,30 @@
 //Rc receiver   //2 channels
 #define UP_DOWN_IN_PIN   16
 #define  LEFT_RIGHT_IN_PIN  17
+#define  RUDDER_IN_PIN  14
 #define  AUX_IN_PIN 14  //is it use RC ,high level :no
 bool RCWork = true;
 
 volatile uint8_t bUpdateFlagsRC = 0;
 #define UP_DOWN_FLAG   0b10
 #define LEFT_RIGHT_FLAG 0b100
+#define RUDDERT_FLAG 0b1000
+
+bool isInMucis = false;
+bool isInBuzzer = false;
 
 uint32_t UpDownStart;
 uint32_t LeftRightStart;
+uint32_t RudderStart;
 
 volatile uint16_t UpDownEnd = 0;
 volatile uint16_t LeftRightEnd = 0;
+volatile uint16_t RudderEnd = 0;
 
 int UpDownIn;
 int LeftRightIn;
 
-
+boolean blinkAway = false;
  //Speaker Mode
  #define SPK_OFF  0x00
  #define SPK_ON  0x01
@@ -85,8 +92,8 @@ double Gyro_Car;
 double KA_P,KA_D;
 double KP_P,KP_I;
 double K_Base;
-struct EEpromData SavingData;
-struct EEpromData ReadingData;
+//struct EEpromData SavingData;
+//struct EEpromData ReadingData;
 
 int Speed_Need,Turn_Need;
 int Speed_Diff,Speed_Diff_ALL;
@@ -172,6 +179,7 @@ void setup() {
   {
     PCintPort::attachInterrupt(UP_DOWN_IN_PIN, calcUpDown,CHANGE);
     PCintPort::attachInterrupt(LEFT_RIGHT_IN_PIN, calcLeftRight,CHANGE);
+    PCintPort::attachInterrupt(RUDDER_IN_PIN, calcRudder,CHANGE);
   }
   PCintPort::attachInterrupt(SPD_INT_L, Encoder_L,FALLING);
   PCintPort::attachInterrupt(SPD_INT_R, Encoder_R,FALLING);
@@ -206,9 +214,9 @@ void loop() {
           Car_Control();
         }
       }      
-      UserComunication();
+      //UserComunication();
        ProcessRC(); 
-      MusicPlay();   
+       MusicPlay();   
     }
   
 
@@ -237,8 +245,10 @@ void PWM_Calculate()
   //Serial.print(Speed_Need);  Serial.print("\t"); Serial.println(Turn_Need);
   
   Position_Add += Speed_Need;  //
+  int turbo = 800;
+  if (blinkAway) turbo = 1500;
   
-  Position_Add = constrain(Position_Add, -800, 800);
+  Position_Add = constrain(Position_Add, -1*turbo, turbo);  //these contraints set the top speed
   // Serial.print(Position_AVG_Filter);  Serial.print("\t"); Serial.println(Position_Add);
 //Serial.print((Angle_Car-2 + K_Base)* KA_P);  Serial.print("\t");
   pwm =  (Angle_Car-5 + K_Base)* KA_P   //P
@@ -318,123 +328,6 @@ void Car_Control()
 }
 
 
-void UserComunication()
-{
-  MySerialEvent();
-  if(SerialPacket.m_PackageOK == true)
-  {
-    SerialPacket.m_PackageOK = false;
-    switch(SerialPacket.m_Buffer[4])
-    {
-      case 0x01:break;
-      case 0x02: UpdatePID(); break;
-      case 0x03: CarDirection();break;
-      case 0x04: SendPID();break;
-      case 0x05:  
-                  SavingData.KA_P = KA_P;
-                  SavingData.KA_D = KA_D;
-                  SavingData.KP_P = KP_P;
-                  SavingData.KP_I = KP_I;
-                  SavingData.K_Base = K_Base;
-                  WritePIDintoEEPROM(&SavingData);
-                  break;
-      case 0x06:  break;
-      case 0x07:break;
-      default:break;             
-    }
-  }
-  
-}
-
-void UpdatePID()
-{
-  unsigned int Upper,Lower;
-  double NewPara;
-  Upper = SerialPacket.m_Buffer[2];
-  Lower = SerialPacket.m_Buffer[1];
-  NewPara = (float)(Upper<<8 | Lower)/100.0;
-  switch(SerialPacket.m_Buffer[3])
-  {
-    case 0x01:KA_P = NewPara; Serial.print("Get KA_P: \n");Serial.println(KA_P);break;
-    case 0x02:KA_D = NewPara; Serial.print("Get KA_D: \n");Serial.println(KA_D);break;
-    case 0x03:KP_P = NewPara; Serial.print("Get KP_P: \n");Serial.println(KP_P);break;
-    case 0x04:KP_I = NewPara; Serial.print("Get KP_I: \n");Serial.println(KP_I);break;
-    case 0x05:K_Base = NewPara; Serial.print("Get K_Base: \n");Serial.println(K_Base);break;
-    default:break;
-  }
-}
-
-void CarDirection()
-{
-  unsigned char Speed = SerialPacket.m_Buffer[1];
-  switch(SerialPacket.m_Buffer[3])
-  {
-    case 0x00: Speed_Need = 0;Turn_Need = 0;break;
-    case 0x01: Speed_Need = -Speed; break;
-    case 0x02: Speed_Need = Speed; break;
-    case 0x03: Turn_Need = Speed; break;
-    case 0x04: Turn_Need = -Speed; break;
-    default:break;
-  }
-}
-
-void SendPID()
-{
-  static unsigned char cnt = 0;
-  unsigned char data[3];
-  switch(cnt)
-  {
-    case 0: 
-    data[0] = 0x01;
-    data[1] = int(KA_P*100)/256;
-    data[2] = int(KA_P*100)%256;
-    AssemblyAndSend(0x04,data);
-    cnt++;break;
-    case 1:
-     data[0] = 0x02;
-    data[1] = int(KA_D*100)/256;
-    data[2] = int(KA_D*100)%256;
-    AssemblyAndSend(0x04,data);
-    cnt++;break;  
-    case 2:
-    data[0] = 0x03;
-    data[1] = int(KP_P*100)/256;
-    data[2] = int(KP_P*100)%256;
-    AssemblyAndSend(0x04,data);
-    cnt++;break;    
-    case 3:
-    data[0] = 0x04;
-    data[1] = int(KP_I*100)/256;
-    data[2] = int(KP_I*100)%256;
-    AssemblyAndSend(0x04,data);
-    cnt++;break; 
-    case 4:
-    data[0] = 0x05;
-    data[1] = int(K_Base*100)/256;
-    data[2] = int(K_Base*100)%256;
-    AssemblyAndSend(0x04,data);
-    cnt = 0;break; 
-  default:break;  
-  }
-}
-
-
-
-void AssemblyAndSend(char type ,unsigned char *data)
-{
-  unsigned char sendbuff[6];
-  sendbuff[0] = 0xAA;
-  sendbuff[1] = type;
-  sendbuff[2] = data[0];
-  sendbuff[3] = data[1];
-  sendbuff[4] = data[2];
-  sendbuff[5] = data[0]^data[1]^data[2];
-  for(int i = 0; i < 6; i++)
-  {
-    Serial.write(sendbuff[i]);
-  }
-}
-
 void Init()
 {
   pinMode(BUZZER, OUTPUT);
@@ -465,14 +358,15 @@ void Init()
   KP_I = 0.34;
   K_Base = 6.7;
   
- ReadingData.KA_P = KA_P;
+ /*ReadingData.KA_P = KA_P;
  ReadingData.KA_D = KA_D;
  ReadingData.KP_P = KP_P;
  ReadingData.KP_I =KP_I;
  ReadingData.K_Base = K_Base;
-  
+  */
   Speed_Need = 0;
   Turn_Need = 0;
+  /*
  ReadFromEEprom(&ReadingData);
   KA_P = ReadingData.KA_P;
   KA_D = ReadingData.KA_D;
@@ -485,7 +379,7 @@ void Init()
   Serial.print(KP_P);Serial.print("\t");  
   Serial.print(KP_I);Serial.print("\t");    
   Serial.print(K_Base);Serial.println("\t");
-
+*/
 }
 
 
@@ -510,30 +404,6 @@ void Encoder_R()    //car up is positive car down  is negative
    // Serial.println(Speed_R);
 }
 
-
-void MySerialEvent()
-{
-	uchar c = '0';
-        uchar tmp = 0;
-        if(Serial.available()) {
-      	  c = (uchar)Serial.read();
-	//Serial.println("here");
-          for(int i = 5; i > 0; i--)
-          {
-             SerialPacket.m_Buffer[i] = SerialPacket.m_Buffer[i-1];
-          }
-  	SerialPacket.m_Buffer[0] = c;
-          
-          if(SerialPacket.m_Buffer[5] == 0xAA)
-          {
-             tmp = SerialPacket.m_Buffer[1]^SerialPacket.m_Buffer[2]^SerialPacket.m_Buffer[3];
-             if(tmp == SerialPacket.m_Buffer[0])
-             {
-               SerialPacket.m_PackageOK = true;
-             }
-          }
-        }	
-}
 
 int UpdateAttitude()
 {
@@ -668,22 +538,158 @@ void LEDBlink()
   }  
 }
 
-bool isInMucis = false;
-bool isInBuzzer = false;
+
+
+
+//rc receiver interrupt routine
+//------------------------------------------------------
+
+void calcUpDown()
+{
+ // Serial.println("in up down here");
+  if(digitalRead(UP_DOWN_IN_PIN) == HIGH)
+  {
+    UpDownStart = micros();
+  }
+  else
+  {
+    UpDownEnd = (uint16_t)(micros() - UpDownStart);
+    bUpdateFlagsRC |= UP_DOWN_FLAG;
+  }
+}
+
+void calcLeftRight()
+{
+  // Serial.println("in Left Right here");
+  if(digitalRead(LEFT_RIGHT_IN_PIN) == HIGH)
+  {
+    LeftRightStart = micros();
+  }
+  else
+  {
+    LeftRightEnd = (uint16_t)(micros() - LeftRightStart);
+    bUpdateFlagsRC |= LEFT_RIGHT_FLAG;
+    
+  }
+}
+void calcRudder()
+{
+ // Serial.println("in up down here");
+  if(digitalRead(RUDDER_IN_PIN) == HIGH)
+  {
+    RudderStart = micros();
+  }
+  else
+  {
+    RudderEnd = (uint16_t)(micros() - RudderStart);
+    //bUpdateFlagsRC |= RUDDER_FLAG;
+    if (RudderEnd > 1300) {
+      blinkAway = true;
+    } else {
+      blinkAway = false;
+    }
+    ///Serial.println(RudderEnd);
+  }
+}
+
+
+#define  RC_ERROR 100
+#define RC_CAR_SPEED  160
+int RCTurnSpeed = 80;
+void ProcessRC()
+{
+  if(bUpdateFlagsRC)
+  {
+     noInterrupts(); // turn interrupts off quickly while we take local copies of the shared variables
+
+    if(bUpdateFlagsRC & UP_DOWN_FLAG)
+    {
+      UpDownIn = UpDownEnd;
+      if( abs(UpDownIn - 1500) > RC_ERROR ) 
+      {
+        if(UpDownIn > 1500) // car up
+         Speed_Need = RC_CAR_SPEED;
+         else       // car down
+         Speed_Need = -RC_CAR_SPEED;
+          //Serial.println("here up down");
+      }
+      else
+      {
+        Speed_Need = 0;
+      }
+    }
+   
+    if(bUpdateFlagsRC & LEFT_RIGHT_FLAG)
+    {
+      LeftRightIn = LeftRightEnd;
+      if( abs(LeftRightIn - 1500) > RC_ERROR)
+      {
+      //  RCTurnSpeed = 100;//map(ThrottleIn,1000,2000,0,200);
+        if(LeftRightIn > 1500)
+        Turn_Need = RCTurnSpeed;  // right
+        else   // left
+        Turn_Need = -RCTurnSpeed;
+         //Serial.println("here Left Right");
+      }
+      else
+      {
+        Turn_Need = 0;
+      } 
+    }
+    
+    bUpdateFlagsRC = 0;
+   
+    interrupts();
+  }/*
+  if( blinkAway ) 
+  {
+         uint32_t note = (RudderEnd - 1300) * 10;
+         if (note >65535) note = 65535;
+         if (note <31 ) note = 31;
+         //Serial.print(RudderEnd);
+         //Serial.print("\t");
+         //Serial.println(note);
+         if (note <= 0) note = 1;
+         tone(tonePin,note,100);  
+         //noTone(tonePin); 
+  }
+  else 
+  {
+     noTone(tonePin);
+  }
+*/
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+//vvvvvvvvvv Optional Stuff vvvvvvvvv
+
 
 void MusicPlay()
 {
-/*
-  if((Speed_Need !=0 ) || (Turn_Need !=0 )) //when move let's play music
+
+//  if((Speed_Need !=0 ) || (Turn_Need !=0 )) //when move let's play music
+  if(blinkAway) //when move let's play music
   {
-      if((millis() - BuzzerTimer) >= (380*duration[tonecnt]))
+      if((millis() - BuzzerTimer) >= (12*marioduration[tonecnt]))
       {
          noTone(tonePin);
          tonecnt++;
-         if(tonecnt>=tonelength)
-         tonecnt = 0;
+         if (tonecnt >= sizeof(mario)/sizeof(int) ) tonecnt = 0;
+         //if(tonecnt>=tonelength)
+         //tonecnt = 0;
          BuzzerTimer = millis();
-         tone(tonePin,tune[tonecnt]);  
+         tone(tonePin,mario[tonecnt]);  
          isInMucis  = true;
       }   
   }
@@ -692,7 +698,7 @@ void MusicPlay()
     isInMucis = false;
      noTone(tonePin);
   }
- */
+ 
  /*
   if( Angle_Car > 45 || Angle_Car < -45 ) //if car fall down ,let's alarm
   {
@@ -736,85 +742,150 @@ void MusicPlay()
 }
 
 
-//rc receiver interrupt routine
-//------------------------------------------------------
 
-void calcUpDown()
+/*
+void UserComunication()
 {
- // Serial.println("in up down here");
-  if(digitalRead(UP_DOWN_IN_PIN) == HIGH)
+  MySerialEvent();
+  if(SerialPacket.m_PackageOK == true)
   {
-    UpDownStart = micros();
-  }
-  else
-  {
-    UpDownEnd = (uint16_t)(micros() - UpDownStart);
-    bUpdateFlagsRC |= UP_DOWN_FLAG;
-  }
-}
-
-void calcLeftRight()
-{
-  // Serial.println("in Left Right here");
-  if(digitalRead(LEFT_RIGHT_IN_PIN) == HIGH)
-  {
-    LeftRightStart = micros();
-  }
-  else
-  {
-    LeftRightEnd = (uint16_t)(micros() - LeftRightStart);
-    bUpdateFlagsRC |= LEFT_RIGHT_FLAG;
-  }
-}
-
-
-#define  RC_ERROR 100
-#define RC_CAR_SPEED  160
-int RCTurnSpeed = 80;
-void ProcessRC()
-{
-  if(bUpdateFlagsRC)
-  {
-     noInterrupts(); // turn interrupts off quickly while we take local copies of the shared variables
-
-    if(bUpdateFlagsRC & UP_DOWN_FLAG)
+    SerialPacket.m_PackageOK = false;
+    switch(SerialPacket.m_Buffer[4])
     {
-      UpDownIn = UpDownEnd;
-      if( abs(UpDownIn - 1500) > RC_ERROR ) 
-      {
-        if(UpDownIn > 1500) // car up
-         Speed_Need = RC_CAR_SPEED;
-         else       // car down
-         Speed_Need = -RC_CAR_SPEED;
-          //Serial.println("here up down");
-      }
-      else
-      {
-        Speed_Need = 0;
-      }
+      case 0x01:break;
+      case 0x02: UpdatePID(); break;
+      case 0x03: CarDirection();break;
+      case 0x04: SendPID();break;
+      case 0x05:  
+                  SavingData.KA_P = KA_P;
+                  SavingData.KA_D = KA_D;
+                  SavingData.KP_P = KP_P;
+                  SavingData.KP_I = KP_I;
+                  SavingData.K_Base = K_Base;
+                  WritePIDintoEEPROM(&SavingData);
+                  break;
+      case 0x06:  break;
+      case 0x07:break;
+      default:break;             
     }
-   
-    if(bUpdateFlagsRC & LEFT_RIGHT_FLAG)
-    {
-      LeftRightIn = LeftRightEnd;
-      if( abs(LeftRightIn - 1500) > RC_ERROR)
-      {
-      //  RCTurnSpeed = 100;//map(ThrottleIn,1000,2000,0,200);
-        if(LeftRightIn > 1500)
-        Turn_Need = -RCTurnSpeed;  // right
-        else   // left
-        Turn_Need = RCTurnSpeed;
-         //Serial.println("here Left Right");
-      }
-      else
-      {
-        Turn_Need = 0;
-      } 
-    }
-    
-    bUpdateFlagsRC = 0;
-   
-    interrupts();
   }
-    
+  
 }
+*/
+/*
+void UpdatePID()
+{
+  unsigned int Upper,Lower;
+  double NewPara;
+  Upper = SerialPacket.m_Buffer[2];
+  Lower = SerialPacket.m_Buffer[1];
+  NewPara = (float)(Upper<<8 | Lower)/100.0;
+  switch(SerialPacket.m_Buffer[3])
+  {
+    case 0x01:KA_P = NewPara; Serial.print("Get KA_P: \n");Serial.println(KA_P);break;
+    case 0x02:KA_D = NewPara; Serial.print("Get KA_D: \n");Serial.println(KA_D);break;
+    case 0x03:KP_P = NewPara; Serial.print("Get KP_P: \n");Serial.println(KP_P);break;
+    case 0x04:KP_I = NewPara; Serial.print("Get KP_I: \n");Serial.println(KP_I);break;
+    case 0x05:K_Base = NewPara; Serial.print("Get K_Base: \n");Serial.println(K_Base);break;
+    default:break;
+  }
+}
+
+
+void CarDirection()
+{
+  unsigned char Speed = SerialPacket.m_Buffer[1];
+  switch(SerialPacket.m_Buffer[3])
+  {
+    case 0x00: Speed_Need = 0;Turn_Need = 0;break;
+    case 0x01: Speed_Need = -Speed; break;
+    case 0x02: Speed_Need = Speed; break;
+    case 0x03: Turn_Need = Speed; break;
+    case 0x04: Turn_Need = -Speed; break;
+    default:break;
+  }
+}
+
+void SendPID()
+{
+  static unsigned char cnt = 0;
+  unsigned char data[3];
+  switch(cnt)
+  {
+    case 0: 
+    data[0] = 0x01;
+    data[1] = int(KA_P*100)/256;
+    data[2] = int(KA_P*100)%256;
+    AssemblyAndSend(0x04,data);
+    cnt++;break;
+    case 1:
+     data[0] = 0x02;
+    data[1] = int(KA_D*100)/256;
+    data[2] = int(KA_D*100)%256;
+    AssemblyAndSend(0x04,data);
+    cnt++;break;  
+    case 2:
+    data[0] = 0x03;
+    data[1] = int(KP_P*100)/256;
+    data[2] = int(KP_P*100)%256;
+    AssemblyAndSend(0x04,data);
+    cnt++;break;    
+    case 3:
+    data[0] = 0x04;
+    data[1] = int(KP_I*100)/256;
+    data[2] = int(KP_I*100)%256;
+    AssemblyAndSend(0x04,data);
+    cnt++;break; 
+    case 4:
+    data[0] = 0x05;
+    data[1] = int(K_Base*100)/256;
+    data[2] = int(K_Base*100)%256;
+    AssemblyAndSend(0x04,data);
+    cnt = 0;break; 
+  default:break;  
+  }
+}
+
+*/
+/*
+void AssemblyAndSend(char type ,unsigned char *data)
+{
+  unsigned char sendbuff[6];
+  sendbuff[0] = 0xAA;
+  sendbuff[1] = type;
+  sendbuff[2] = data[0];
+  sendbuff[3] = data[1];
+  sendbuff[4] = data[2];
+  sendbuff[5] = data[0]^data[1]^data[2];
+  for(int i = 0; i < 6; i++)
+  {
+    Serial.write(sendbuff[i]);
+  }
+}
+
+
+void MySerialEvent()
+{
+  uchar c = '0';
+        uchar tmp = 0;
+        if(Serial.available()) {
+          c = (uchar)Serial.read();
+  //Serial.println("here");
+          for(int i = 5; i > 0; i--)
+          {
+             SerialPacket.m_Buffer[i] = SerialPacket.m_Buffer[i-1];
+          }
+    SerialPacket.m_Buffer[0] = c;
+          
+          if(SerialPacket.m_Buffer[5] == 0xAA)
+          {
+             tmp = SerialPacket.m_Buffer[1]^SerialPacket.m_Buffer[2]^SerialPacket.m_Buffer[3];
+             if(tmp == SerialPacket.m_Buffer[0])
+             {
+               SerialPacket.m_PackageOK = true;
+             }
+          }
+        } 
+}
+
+*/

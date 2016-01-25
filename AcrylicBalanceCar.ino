@@ -21,7 +21,7 @@
 //Rc receiver   //2 channels
 #define UP_DOWN_IN_PIN   16
 #define  LEFT_RIGHT_IN_PIN  17
-#define  RUDDER_IN_PIN  14
+#define  THROTTLE_IN_PIN  14
 #define  AUX_IN_PIN 14  //is it use RC ,high level :no
 bool RCWork = true;
 
@@ -35,16 +35,16 @@ bool isInBuzzer = false;
 
 uint32_t UpDownStart;
 uint32_t LeftRightStart;
-uint32_t RudderStart;
+uint32_t ThrottleStart;
 
 volatile uint16_t UpDownEnd = 0;
 volatile uint16_t LeftRightEnd = 0;
-volatile uint16_t RudderEnd = 0;
+volatile uint16_t ThrottleEnd = 0;
 
 int UpDownIn;
 int LeftRightIn;
 
-boolean blinkAway = false;
+boolean useThrottle = false;
  //Speaker Mode
  #define SPK_OFF  0x00
  #define SPK_ON  0x01
@@ -179,7 +179,7 @@ void setup() {
   {
     PCintPort::attachInterrupt(UP_DOWN_IN_PIN, calcUpDown,CHANGE);
     PCintPort::attachInterrupt(LEFT_RIGHT_IN_PIN, calcLeftRight,CHANGE);
-    PCintPort::attachInterrupt(RUDDER_IN_PIN, calcRudder,CHANGE);
+    PCintPort::attachInterrupt(THROTTLE_IN_PIN, calcThrottle,CHANGE);
   }
   PCintPort::attachInterrupt(SPD_INT_L, Encoder_L,FALLING);
   PCintPort::attachInterrupt(SPD_INT_R, Encoder_R,FALLING);
@@ -246,7 +246,7 @@ void PWM_Calculate()
   
   Position_Add += Speed_Need;  //
   int turbo = 800;
-  if (blinkAway) turbo = 1500;
+  if (useThrottle) turbo = ThrottleEnd;
   
   Position_Add = constrain(Position_Add, -1*turbo, turbo);  //these contraints set the top speed
   // Serial.print(Position_AVG_Filter);  Serial.print("\t"); Serial.println(Position_Add);
@@ -572,23 +572,23 @@ void calcLeftRight()
     
   }
 }
-void calcRudder()
+void calcThrottle()
 {
  // Serial.println("in up down here");
-  if(digitalRead(RUDDER_IN_PIN) == HIGH)
+  if(digitalRead(THROTTLE_IN_PIN) == HIGH)
   {
-    RudderStart = micros();
+    ThrottleStart = micros();
   }
   else
   {
-    RudderEnd = (uint16_t)(micros() - RudderStart);
+    ThrottleEnd = (uint16_t)(micros() - ThrottleStart);
     //bUpdateFlagsRC |= RUDDER_FLAG;
-    if (RudderEnd > 1300) {
-      blinkAway = true;
+    if (ThrottleEnd > 1300) {
+      useThrottle = true;
     } else {
-      blinkAway = false;
+      useThrottle = false;
     }
-    ///Serial.println(RudderEnd);
+    ///Serial.println(ThrottleEnd);
   }
 }
 
@@ -641,12 +641,12 @@ void ProcessRC()
    
     interrupts();
   }/*
-  if( blinkAway ) 
+  if( useThrottle ) 
   {
-         uint32_t note = (RudderEnd - 1300) * 10;
+         uint32_t note = (ThrottleEnd - 1300) * 10;
          if (note >65535) note = 65535;
          if (note <31 ) note = 31;
-         //Serial.print(RudderEnd);
+         //Serial.print(ThrottleEnd);
          //Serial.print("\t");
          //Serial.println(note);
          if (note <= 0) note = 1;
@@ -679,7 +679,7 @@ void MusicPlay()
 {
 
 //  if((Speed_Need !=0 ) || (Turn_Need !=0 )) //when move let's play music
-  if(blinkAway) //when move let's play music
+  if(useThrottle) //when move let's play music
   {
       if((millis() - BuzzerTimer) >= (12*marioduration[tonecnt]))
       {

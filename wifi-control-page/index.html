@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+
+        </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="apple-touch-icon" sizes="57x57" href="apple-icon-57x57px.png" />
+        <link rel="apple-touch-icon" sizes="114x114" href="apple-icon-114x114px.png" />
+        <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+
+        <script src="http://code.jquery.com/jquery-2.1.3.min.js"></script>
+        <script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+        <script src="http://static.pureexample.com/js/flot/excanvas.min.js"></script>
+        <script src="http://static.pureexample.com/js/flot/jquery.flot.min.js"></script>
+
+        <!-- CSS -->
+        <style type="text/css">
+        .ui-btn {
+            width: 125px !important;
+        }
+        </style>
+
+    </head>
+    <body>
+        <div data-role="page" id="MainPageView" data-theme="a">
+            <div data-role="header" data-position="fixed">
+                <h1>Balance Bot</h1>
+            </div>
+            <div data-role="main" class="ui-content">
+            <div>
+            <div style="text-align:center;">
+                <button name="ClickButton" data-inline="true" id="forwardButton">Forwards</button>
+            </div>
+            <div style="text-align:center;">
+                <button name="ClickButton" data-inline="true" id="leftButton">Left</button>
+                <button name="ClickButton" data-inline="true" id="stopButton" style="background: red">Stop</button>
+                <button name="ClickButton" data-inline="true" id="rightButton">Right</button>
+            </div>
+            <div style="text-align:center;">
+                <button name="ClickButton" data-inline="true" id="backButton">Backwards</button>
+            </div>
+            <br>
+            <br>
+            <div data-role="footer" style="text-align:center;">
+                
+            </div>
+        </div>    
+
+
+
+
+
+    <script>
+    $(document).on("pagecreate", "#MainPageView", function(){
+        var bot_url = "http://172.20.10.2";
+
+
+        $("#forwardButton").click( function()
+	       		{
+                $.get( bot_url+"/GO=F", function( data ) {
+                });
+             });
+
+        $("#leftButton").click( function()
+                {
+                $.get( bot_url+"/GO=L", function( data ) {
+                });
+             });
+
+        $("#rightButton").click( function()
+            {
+                $.get( bot_url+"/GO=R", function( data ) {
+                });
+             });
+        $("#stopButton").click( function()
+            {
+                $.get( bot_url+"/GO=S", function( data ) {
+                });
+             });
+        $("#backButton").click( function()
+            {
+                $.get( bot_url+"/GO=B", function( data ) {
+                });
+             });
+
+    });
+
+
+    $('#MainPageView').on('pageinit', function(){});
+
+
+
+
+
+    </script>
+
+     
+</body>

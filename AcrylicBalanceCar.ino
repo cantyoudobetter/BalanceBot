@@ -10,7 +10,10 @@
 //#include <EEPROM.h>
 #include "music.h"
 //#include "MyEEprom.h"
+#include <LiquidCrystal_I2C.h>
 
+// Set the LCD address to 0x27 for a 16 chars and 2 line display
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 #include "PinChangeInt.h" // for RC reciver
 
 //#define RESTRICT_PITCH // Comment out to restrict roll to ±90deg instead - please read: http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf
@@ -104,7 +107,7 @@ bool blinkState = false;
 uint32_t calTimer;
 uint32_t delayTimer;
 uint32_t  lampTimer;
-
+uint32_t  lcdTimer;
 
 byte speakMode;
 
@@ -116,6 +119,8 @@ uint32_t  BuzzerTimer;
 
 void setup() {
   Serial.begin(9600);
+  lcd.begin();
+  lcd.print("Bordelon Bot!");
   Init();  
   //mySerial.begin(9600);
   Wire.begin();
@@ -187,7 +192,7 @@ void setup() {
   timer = micros();
   LEDTimer = millis();
   lampTimer = millis();
-  
+  lcdTimer = millis();
  // tonelength = sizeof(tune)/sizeof(tune[0]);
   
  
@@ -216,7 +221,15 @@ void loop() {
       }      
       //UserComunication();
        ProcessRC(); 
-       MusicPlay();   
+       MusicPlay(); 
+
+       if (millis() - lcdTimer > 1000) {
+           lcd.setCursor(0,1);
+           lcd.print(Speed_L);  lcd.print("    ");
+           lcd.setCursor(8,1);
+           lcd.print(Speed_R);  lcd.print("    ");
+           lcdTimer = millis();
+       } 
     }
   
 
@@ -598,6 +611,9 @@ void calcThrottle()
 int RCTurnSpeed = 80;
 void ProcessRC()
 {
+  //Serial.println(".");
+
+  
   if(bUpdateFlagsRC)
   {
      noInterrupts(); // turn interrupts off quickly while we take local copies of the shared variables

@@ -1,8 +1,5 @@
-/* 
- Contact information
- -------------------
- */
-//Test change
+//Balance Bot
+
 #include <Wire.h>
 #include "Kalman.h" 
 #include "ComPacket.h"

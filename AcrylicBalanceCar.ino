@@ -120,7 +120,7 @@ uint32_t  BuzzerTimer;
 void setup() {
   Serial.begin(9600);
   lcd.begin();
-  lcd.print("Bordelon Bot!");
+  lcd.print("B~Bot");
   Init();  
   //mySerial.begin(9600);
   Wire.begin();
@@ -224,10 +224,36 @@ void loop() {
        MusicPlay(); 
 
        if (millis() - lcdTimer > 1000) {
+           lcd.setCursor(7,0);
+           if(!useThrottle) 
+           {
+              double temperature = (double)tempRaw / 340.0 + 36.53;
+              lcd.print(temperature);
+              lcd.print(char(223)); lcd.print("C  ");
+           } else {
+              lcd.print("**TURBO**");
+           }
            lcd.setCursor(0,1);
-           lcd.print(Speed_L);  lcd.print("    ");
+           
+           char outL[3];
+           String str;
+           str=String(Speed_L);
+           str.toCharArray(outL,3);
+           char outR[3];
+           str=String(Speed_R);
+           str.toCharArray(outR,3);
+           char finalRow[16];
+           strcpy(finalRow,outL);
+           strcat(finalRow,"|");
+           strcat(finalRow,outR);
+           strcat(finalRow,"    ");
+           lcd.print(finalRow);
+           lcd.setCursor(10,1);
+           lcd.print(pwm);
+           
+           /*lcd.print("    ");
            lcd.setCursor(8,1);
-           lcd.print(Speed_R);  lcd.print("    ");
+           lcd.print(Speed_R);  lcd.print("    ");*/
            lcdTimer = millis();
        } 
     }
@@ -695,7 +721,8 @@ void MusicPlay()
 {
 
 //  if((Speed_Need !=0 ) || (Turn_Need !=0 )) //when move let's play music
-  if(useThrottle) //when move let's play music
+  //if(useThrottle) //when move let's play music
+  if (false)
   {
       if((millis() - BuzzerTimer) >= (12*marioduration[tonecnt]))
       {

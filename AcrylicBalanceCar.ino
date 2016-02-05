@@ -7,10 +7,8 @@
 //#include <EEPROM.h>
 #include "music.h"
 //#include "MyEEprom.h"
-#include <LiquidCrystal_I2C.h>
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
-LiquidCrystal_I2C lcd(0x27, 16, 2);
 #include "PinChangeInt.h" // for RC reciver
 
 //#define RESTRICT_PITCH // Comment out to restrict roll to ±90deg instead - please read: http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf
@@ -99,6 +97,7 @@ int Speed_Need,Turn_Need;
 int Speed_Diff,Speed_Diff_ALL;
 
 uint32_t LEDTimer;
+uint32_t SerialTimer;
 bool blinkState = false;
 
 uint32_t calTimer;
@@ -116,10 +115,10 @@ uint32_t  BuzzerTimer;
 
 void setup() {
   Serial.begin(9600);
-  lcd.begin();
-  lcd.print("B~Bot");
+  //lcd.begin();
+  //lcd.print("B~Bot");
   Init();  
-  //mySerial.begin(9600);
+  //mySerial.begin(57600);
   Wire.begin();
   TWBR = ((F_CPU / 400000L) - 16) / 2; // Set I2C frequency to 400kHz
 
@@ -176,7 +175,7 @@ void setup() {
  
   // using the PinChangeInt library, attach the interrupts
   // used to read the channels
-  Serial.print("RCWork: "); Serial.println(RCWork);
+  //Serial.print("RCWork: "); Serial.println(RCWork);
   if(RCWork == true)
   {
     PCintPort::attachInterrupt(UP_DOWN_IN_PIN, calcUpDown,CHANGE);
@@ -189,7 +188,7 @@ void setup() {
   timer = micros();
   LEDTimer = millis();
   lampTimer = millis();
-  lcdTimer = millis();
+ // lcdTimer = millis();
  // tonelength = sizeof(tune)/sizeof(tune[0]);
   
  
@@ -220,39 +219,7 @@ void loop() {
        ProcessRC(); 
        MusicPlay(); 
 
-       if (millis() - lcdTimer > 1000) {
-           lcd.setCursor(7,0);
-           if(!useThrottle) 
-           {
-              double temperature = (double)tempRaw / 340.0 + 36.53;
-              lcd.print(temperature);
-              lcd.print(char(223)); lcd.print("C  ");
-           } else {
-              lcd.print("**TURBO**");
-           }
-           lcd.setCursor(0,1);
-           
-           char outL[3];
-           String str;
-           str=String(Speed_L);
-           str.toCharArray(outL,3);
-           char outR[3];
-           str=String(Speed_R);
-           str.toCharArray(outR,3);
-           char finalRow[16];
-           strcpy(finalRow,outL);
-           strcat(finalRow,"|");
-           strcat(finalRow,outR);
-           strcat(finalRow,"    ");
-           lcd.print(finalRow);
-           lcd.setCursor(10,1);
-           lcd.print(pwm);
-           
-           /*lcd.print("    ");
-           lcd.setCursor(8,1);
-           lcd.print(Speed_R);  lcd.print("    ");*/
-           lcdTimer = millis();
-       } 
+
     }
   
 
@@ -389,7 +356,7 @@ void Init()
   Speed_Diff = 0;Speed_Diff_ALL = 0;
   
   KA_P = 25.0;
-  KA_D = 2; //3.5;
+  KA_D = 3.5;
   KP_P = 30;
   KP_I = 0.34;
   K_Base = 6.7;
@@ -527,7 +494,18 @@ int UpdateAttitude()
   Serial.print("\t");
   Serial.println("");
 #endif
+/*if((millis() - SerialTimer) > 100)
+  {
+    Serial.println(kalAngleX);
+    SerialTimer = millis();
+  }*/
+     
 
+Serial.print(kalAngleX);
+Serial.print(",");
+Serial.print(Speed_L);
+Serial.print(",");
+Serial.println(Speed_R);
 #if 0
 //  This is the rotation around the axle
   Serial.print(roll); Serial.print("\t");

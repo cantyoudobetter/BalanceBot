@@ -4,9 +4,9 @@
 #include "Kalman.h" 
 #include "ComPacket.h"
 #include "I2C.h"
-//#include <EEPROM.h>
+#include <EEPROM.h>
 #include "music.h"
-//#include "MyEEprom.h"
+#include "MyEEprom.h"
 
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 #include "PinChangeInt.h" // for RC reciver
@@ -43,6 +43,7 @@ int UpDownIn;
 int LeftRightIn;
 
 boolean useThrottle = false;
+boolean sendTelemetry = true;
  //Speaker Mode
  #define SPK_OFF  0x00
  #define SPK_ON  0x01
@@ -90,11 +91,12 @@ double Gyro_Car;
 double KA_P,KA_D;
 double KP_P,KP_I;
 double K_Base;
-//struct EEpromData SavingData;
-//struct EEpromData ReadingData;
+struct EEpromData SavingData;
+struct EEpromData ReadingData;
 
 int Speed_Need,Turn_Need;
-int Speed_Diff,Speed_Diff_ALL;
+int Speed_Diff,Speed_Diff_ALL, turbo;
+
 
 uint32_t LEDTimer;
 uint32_t SerialTimer;
@@ -215,7 +217,7 @@ void loop() {
           Car_Control();
         }
       }      
-      //UserComunication();
+      UserComunication();
        ProcessRC(); 
        MusicPlay(); 
 
@@ -223,6 +225,80 @@ void loop() {
     }
   
 
+}
+void sendSettings() {
+        Serial.print("s,");
+        Serial.print(KA_P);
+        Serial.print(",");
+        Serial.print(KA_D);
+        Serial.print(",");
+        Serial.print(KP_I);
+        Serial.print(",");
+        Serial.println(KP_P);
+}
+
+void UserComunication() {
+
+
+
+  if (Serial.available() > 0) {
+                // read the incoming byte:
+     char incomingByte = Serial.read();
+     
+      if (incomingByte == 0x73) {  //0x73 = "s"
+        //Serial.flush();
+        sendSettings();
+        
+      } 
+      if (incomingByte == 0x74) {  //0x73 = "t"
+        sendTelemetry = !sendTelemetry;
+        
+      } 
+      if (incomingByte == 0x75) {  //0x75 = "u"
+        //while (Serial.available() > 0) { 
+            String KA_PStr = Serial.readStringUntil(0x2C);
+            KA_P = KA_PStr.toFloat();
+            String KA_DStr = Serial.readStringUntil(0x2C);
+            KA_D = KA_DStr.toFloat();
+            String KP_IStr = Serial.readStringUntil(0x2C);
+            KP_I = KP_IStr.toFloat();
+            String KP_PStr = Serial.readStringUntil(0xA);
+            KP_P = KP_PStr.toFloat();
+        
+            sendSettings();
+            
+        //}
+        //Serial.flush();
+      } 
+      if (incomingByte == 0x77) {  //0x75 = "w"  write eeprom
+        SaveData();
+      }
+
+      
+  } else {
+    if (sendTelemetry) {
+      if((millis() - SerialTimer) > 100)
+      {
+        
+  
+        Serial.print("t,");
+        Serial.print(kalAngleX);
+        Serial.print(",");
+        Serial.print(Speed_L);
+        Serial.print(",");
+        Serial.print(Speed_R);
+        Serial.print(",");
+        Serial.print(Position_AVG);
+        Serial.print(",");
+        Serial.print(Position_Add);
+        Serial.print(",");
+        Serial.print(Speed_Need);
+        Serial.print(",");
+        Serial.println(turbo);
+        SerialTimer = millis();
+      }
+    }    
+  }
 }
 
 bool StopFlag = true;
@@ -248,7 +324,7 @@ void PWM_Calculate()
   //Serial.print(Speed_Need);  Serial.print("\t"); Serial.println(Turn_Need);
   
   Position_Add += Speed_Need;  //
-  int turbo = 800;
+  turbo = 800;
   if (useThrottle) turbo = ThrottleEnd;
   
   Position_Add = constrain(Position_Add, -1*turbo, turbo);  //these contraints set the top speed
@@ -333,6 +409,7 @@ void Car_Control()
 
 void Init()
 {
+  SerialTimer = millis();
   pinMode(BUZZER, OUTPUT);
   pinMode(SPD_PUL_L, INPUT);//
   pinMode(SPD_PUL_R, INPUT);//
@@ -358,7 +435,7 @@ void Init()
   KA_P = 25.0;
   KA_D = 3.5;
   KP_P = 30;
-  KP_I = 0.34;
+  KP_I = 0.19;
   K_Base = 6.7;
   
  /*ReadingData.KA_P = KA_P;
@@ -369,14 +446,14 @@ void Init()
   */
   Speed_Need = 0;
   Turn_Need = 0;
-  /*
+  
  ReadFromEEprom(&ReadingData);
   KA_P = ReadingData.KA_P;
   KA_D = ReadingData.KA_D;
   KP_P = ReadingData.KP_P;
   KP_I = ReadingData.KP_I;
   K_Base = ReadingData.K_Base;
-  Serial.print("PID Data is");Serial.print("\t");
+  /*Serial.print("PID Data is");Serial.print("\t");
   Serial.print(KA_P);Serial.print("\t");
   Serial.print(KA_D);Serial.print("\t");
   Serial.print(KP_P);Serial.print("\t");  
@@ -501,11 +578,7 @@ int UpdateAttitude()
   }*/
      
 
-Serial.print(kalAngleX);
-Serial.print(",");
-Serial.print(Speed_L);
-Serial.print(",");
-Serial.println(Speed_R);
+
 #if 0
 //  This is the rotation around the axle
   Serial.print(roll); Serial.print("\t");
@@ -759,7 +832,14 @@ void MusicPlay()
   
 }
 
-
+void SaveData() {
+                  SavingData.KA_P = KA_P;
+                  SavingData.KA_D = KA_D;
+                  SavingData.KP_P = KP_P;
+                  SavingData.KP_I = KP_I;
+                  SavingData.K_Base = K_Base;
+                  WritePIDintoEEPROM(&SavingData);  
+}
 
 /*
 void UserComunication()

@@ -3,7 +3,7 @@
 
 #include <EEPROM.h>
 
-//#define USEEEPROM
+#define USEEEPROM
 
 #define START_ADDRESS 0x0A
 

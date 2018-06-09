@@ -8,6 +8,7 @@
 #include "music.h"
 #include "MyEEprom.h"
 
+//small change for demo
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 #include "PinChangeInt.h" // for RC reciver
 
